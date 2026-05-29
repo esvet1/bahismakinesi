@@ -254,18 +254,35 @@ async function loadBet(id){
 }
 
 // ── POLL ──
-function userIsTyping(){ const active=document.activeElement; return active&&(active.id==='jnick'||active.id==='jamt'); }
-function startPoll(){ stopPoll(); pollT=setInterval(async()=>{ if(!betId)return; try{ const r=await fetch(`${API}/${betId}`); const d=await r.json(); if(r.ok){ const prev=betData?.participants?.length??0; betData=d; if(!userIsTyping()){ renderRoom(); if(d.participants.length>prev)toast('🎉 Yeni katılımcı!'); } } }catch(_){} },5000); }
+function startPoll(){ stopPoll(); pollT=setInterval(async()=>{ if(!betId)return; try{ const r=await fetch(`${API}/${betId}`); const d=await r.json(); if(r.ok){ const prev=betData?.participants?.length??0; const newParts=d.participants.length; betData=d; partialUpdate(); if(newParts>prev)toast('🎉 Yeni katılımcı!'); } }catch(_){} },5000); }
 function stopPoll(){ if(pollT){clearInterval(pollT);pollT=null;} }
 
-// ── RENDER ──
+// ── HELPERS ──
+function calcPool(parts){
+  const pA=parts.filter(p=>p.choice==='a').reduce((s,p)=>s+p.amount,0);
+  const pB=parts.filter(p=>p.choice==='b').reduce((s,p)=>s+p.amount,0);
+  return {pA,pB,tot:pA+pB,pctA:pA+pB?Math.round(pA/(pA+pB)*100):50};
+}
+function partsHtml(parts,d,myNick){
+  if(!parts.length) return '<div class="empty"><div class="eicon">🤷</div>Henüz kimse katılmadı.</div>';
+  return parts.map(p=>{
+    const on=p.choice==='a'?d.opt_a_name:d.opt_b_name;
+    const oo=p.choice==='a'?d.opt_a_odds:d.opt_b_odds;
+    const pot=(p.amount*oo).toFixed(0), isMe=p.nickname===myNick;
+    return `<div class="pitem"${isMe?' style="border-color:var(--accent3)"':''}>
+      <div class="pi-l"><div class="av av-${p.choice}">${esc(p.nickname).charAt(0).toUpperCase()}</div>
+      <div><div class="pnm">${esc(p.nickname)}${isMe?' <span style="color:var(--accent3);font-size:.68rem">(sen)</span>':''}</div><div class="pch">${esc(on)} · ×${oo}</div></div></div>
+      <div style="text-align:right"><div class="pamt" style="color:${p.choice==='a'?'var(--accent)':'var(--accent2)'}">${p.amount} ₺</div><div class="pwin">→ ${pot} ₺</div></div>
+    </div>`;
+  }).join('');
+}
+
+// ── FULL RENDER (ilk yükleme / katılım sonrası) ──
 function renderRoom(){
   const d=betData; if(!d)return;
   const shareUrl=window.location.origin+'/?b='+betId;
   const parts=d.participants||[];
-  const pA=parts.filter(p=>p.choice==='a').reduce((s,p)=>s+p.amount,0);
-  const pB=parts.filter(p=>p.choice==='b').reduce((s,p)=>s+p.amount,0);
-  const tot=pA+pB, pctA=tot?Math.round(pA/tot*100):50;
+  const {pA,pB,tot,pctA}=calcPool(parts);
   const myNick=sessionStorage.getItem('nick_'+betId);
   const joined=myNick&&parts.find(p=>p.nickname===myNick);
 
@@ -286,13 +303,11 @@ function renderRoom(){
       const myOdds=joined.choice==='a'?d.opt_a_odds:d.opt_b_odds;
       jform=`<div class="jform" style="border-color:var(--accent3)"><h3 style="color:var(--accent3)">✅ Katıldın!</h3><p style="color:var(--muted);font-size:.83rem;margin-top:4px"><strong>${esc(myNick)}</strong> → <strong>${esc(myOpt)}</strong> · ${joined.amount} ₺ · Potansiyel: ${(joined.amount*myOdds).toFixed(0)} ₺</p></div>`;
     } else {
-      const savedNick=document.getElementById('jnick')?.value||sessionStorage.getItem('global_nick')||'';
-      const savedAmt=document.getElementById('jamt')?.value||'';
       jform=`<div class="jform"><h3>Bahse Gir</h3>
         <div id="selinfo" style="font-size:.8rem;color:var(--muted);margin-bottom:11px">↑ Önce bir seçenek seç</div>
         <div class="jrow">
-          <div class="field"><label>Nickname</label><input id="jnick" placeholder="Adın" value="${esc(savedNick)}" /></div>
-          <div class="field"><label>Miktar (₺)</label><input id="jamt" type="number" min="1" placeholder="50" value="${esc(savedAmt)}" /></div>
+          <div class="field"><label>Nickname</label><input id="jnick" placeholder="Adın" value="${esc(sessionStorage.getItem('global_nick')||'')}" /></div>
+          <div class="field"><label>Miktar (₺)</label><input id="jamt" type="number" min="1" placeholder="50" /></div>
           <button class="btn btn-p btn-sm" id="jbtn" onclick="placeBet()" style="margin-top:22px;white-space:nowrap">Katıl ✦</button>
         </div></div>`;
     }
@@ -300,47 +315,60 @@ function renderRoom(){
     jform=`<div style="text-align:center;padding:16px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:22px;color:var(--muted);font-size:.86rem;">🏆 Bahis tamamlandı.</div>`;
   }
 
-  const partsHtml=parts.length===0
-    ?'<div class="empty"><div class="eicon">🤷</div>Henüz kimse katılmadı.</div>'
-    :parts.map(p=>{
-        const on=p.choice==='a'?d.opt_a_name:d.opt_b_name;
-        const oo=p.choice==='a'?d.opt_a_odds:d.opt_b_odds;
-        const pot=(p.amount*oo).toFixed(0);
-        const isMe=p.nickname===myNick;
-        return `<div class="pitem"${isMe?' style="border-color:var(--accent3)"':''}>
-          <div class="pi-l"><div class="av av-${p.choice}">${esc(p.nickname).charAt(0).toUpperCase()}</div>
-          <div><div class="pnm">${esc(p.nickname)}${isMe?' <span style="color:var(--accent3);font-size:.68rem">(sen)</span>':''}</div><div class="pch">${esc(on)} · ×${oo}</div></div></div>
-          <div style="text-align:right"><div class="pamt" style="color:${p.choice==='a'?'var(--accent)':'var(--accent2)'}">${p.amount} ₺</div><div class="pwin">→ ${pot} ₺</div></div>
-        </div>`;
-      }).join('');
-
   const adminBar=d.status!=='resolved'?`<div class="abar"><span class="abar-lbl">⚙ Admin</span><div class="abar-btns">
     <button class="btn btn-win btn-sm" onclick="doResolve('a')">🏆 ${esc(d.opt_a_name)}</button>
     <button class="btn btn-danger btn-sm" onclick="doResolve('b')">🏆 ${esc(d.opt_b_name)}</button>
   </div></div>`:'';
 
   document.getElementById('rcontent').innerHTML=`
-    ${sbadge}
+    <span id="r-badge">${sbadge}</span>
     <div class="btitle">${esc(d.title)}</div>
     ${d.description?`<p class="bdesc">${esc(d.description)}</p>`:''}
     <div class="share"><span>🔗</span><span class="share-url">${shareUrl}</span><button class="cpbtn" onclick="copyLink('${shareUrl}')">Kopyala</button></div>
-    ${winner}
+    <div id="r-winner">${winner}</div>
     <div class="odisplay">
-      <div class="ocard oa${selOpt==='a'?' sel-a':''}" onclick="selOpt_set('a')"><div class="chk">✓</div><div class="oc-lbl">Seçenek A</div><div class="oc-nm">${esc(d.opt_a_name)}</div><div class="oc-odds">×${d.opt_a_odds}</div><div class="oc-st">${parts.filter(p=>p.choice==='a').length} kişi · ${pA} ₺</div></div>
-      <div class="ocard ob${selOpt==='b'?' sel-b':''}" onclick="selOpt_set('b')"><div class="chk">✓</div><div class="oc-lbl">Seçenek B</div><div class="oc-nm">${esc(d.opt_b_name)}</div><div class="oc-odds">×${d.opt_b_odds}</div><div class="oc-st">${parts.filter(p=>p.choice==='b').length} kişi · ${pB} ₺</div></div>
+      <div class="ocard oa${selOpt==='a'?' sel-a':''}" id="ocard-a" onclick="selOpt_set('a')"><div class="chk">✓</div><div class="oc-lbl">Seçenek A</div><div class="oc-nm">${esc(d.opt_a_name)}</div><div class="oc-odds">×${d.opt_a_odds}</div><div class="oc-st" id="oc-st-a">${parts.filter(p=>p.choice==='a').length} kişi · ${pA} ₺</div></div>
+      <div class="ocard ob${selOpt==='b'?' sel-b':''}" id="ocard-b" onclick="selOpt_set('b')"><div class="chk">✓</div><div class="oc-lbl">Seçenek B</div><div class="oc-nm">${esc(d.opt_b_name)}</div><div class="oc-odds">×${d.opt_b_odds}</div><div class="oc-st" id="oc-st-b">${parts.filter(p=>p.choice==='b').length} kişi · ${pB} ₺</div></div>
     </div>
-    <div class="pool"><div class="pool-top"><span class="pool-lbl">Toplam Havuz</span><span class="pool-tot">${tot} ₺</span></div><div class="bar"><div class="bar-fill" style="width:${pctA}%"></div></div><div class="bar-lbl"><span>${esc(d.opt_a_name)} %${pctA}</span><span>${esc(d.opt_b_name)} %${100-pctA}</span></div></div>
+    <div class="pool"><div class="pool-top"><span class="pool-lbl">Toplam Havuz</span><span class="pool-tot" id="r-total">${tot} ₺</span></div><div class="bar"><div class="bar-fill" id="r-bar" style="width:${pctA}%"></div></div><div class="bar-lbl"><span id="r-lbl-a">${esc(d.opt_a_name)} %${pctA}</span><span id="r-lbl-b">${esc(d.opt_b_name)} %${100-pctA}</span></div></div>
     ${jform}
     ${adminBar}
     <div class="live"><span class="ldot"></span>Her 5 saniyede güncellenir</div>
     <div class="divider"></div>
-    <div class="psec-title">Katılımcılar (${parts.length})</div>
-    ${partsHtml}`;
+    <div class="psec-title" id="r-ptitle">Katılımcılar (${parts.length})</div>
+    <div id="r-parts">${partsHtml(parts,d,myNick)}</div>`;
 
   if(selOpt) updateSelInfo();
 }
 
-function selOpt_set(c){ if(betData?.status!=='open')return; selOpt=c; renderRoom(); updateSelInfo(); }
+// ── PARTIAL UPDATE (poll — forma dokunmaz) ──
+function partialUpdate(){
+  const d=betData; if(!d)return;
+  if(!document.getElementById('r-parts')) return; // henüz render edilmemiş
+  const parts=d.participants||[];
+  const {pA,pB,tot,pctA}=calcPool(parts);
+  const myNick=sessionStorage.getItem('nick_'+betId);
+
+  // sadece değişen elementleri güncelle
+  const bar=document.getElementById('r-bar'); if(bar) bar.style.width=pctA+'%';
+  const tot_el=document.getElementById('r-total'); if(tot_el) tot_el.textContent=tot+' ₺';
+  const lblA=document.getElementById('r-lbl-a'); if(lblA) lblA.textContent=`${d.opt_a_name} %${pctA}`;
+  const lblB=document.getElementById('r-lbl-b'); if(lblB) lblB.textContent=`${d.opt_b_name} %${100-pctA}`;
+  const stA=document.getElementById('oc-st-a'); if(stA) stA.textContent=`${parts.filter(p=>p.choice==='a').length} kişi · ${pA} ₺`;
+  const stB=document.getElementById('oc-st-b'); if(stB) stB.textContent=`${parts.filter(p=>p.choice==='b').length} kişi · ${pB} ₺`;
+  const ptitle=document.getElementById('r-ptitle'); if(ptitle) ptitle.textContent=`Katılımcılar (${parts.length})`;
+  const plist=document.getElementById('r-parts'); if(plist) plist.innerHTML=partsHtml(parts,d,myNick);
+
+  // bahis sonuçlandıysa tam render yap (winner banner vs.)
+  if(d.status==='resolved') renderRoom();
+}
+
+function selOpt_set(c){ if(betData?.status!=='open')return; selOpt=c;
+  document.querySelectorAll('.ocard').forEach(el=>el.classList.remove('sel-a','sel-b'));
+  document.getElementById('ocard-a')?.classList.toggle('sel-a',c==='a');
+  document.getElementById('ocard-b')?.classList.toggle('sel-b',c==='b');
+  updateSelInfo();
+}
 function updateSelInfo(){ const el=document.getElementById('selinfo'); if(!el||!selOpt||!betData)return; const n=selOpt==='a'?betData.opt_a_name:betData.opt_b_name; el.innerHTML=`Seçim: <strong style="color:${selOpt==='a'?'var(--accent)':'var(--accent2)'}">${esc(n)}</strong>`; }
 
 // ── PLACE BET ──
