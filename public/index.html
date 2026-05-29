@@ -254,7 +254,8 @@ async function loadBet(id){
 }
 
 // ── POLL ──
-function startPoll(){ stopPoll(); pollT=setInterval(async()=>{ if(!betId)return; try{ const r=await fetch(`${API}/${betId}`); const d=await r.json(); if(r.ok){ const prev=betData?.participants?.length??0; betData=d; renderRoom(); if(d.participants.length>prev)toast('🎉 Yeni katılımcı!'); } }catch(_){} },5000); }
+function userIsTyping(){ const active=document.activeElement; return active&&(active.id==='jnick'||active.id==='jamt'); }
+function startPoll(){ stopPoll(); pollT=setInterval(async()=>{ if(!betId)return; try{ const r=await fetch(`${API}/${betId}`); const d=await r.json(); if(r.ok){ const prev=betData?.participants?.length??0; betData=d; if(!userIsTyping()){ renderRoom(); if(d.participants.length>prev)toast('🎉 Yeni katılımcı!'); } } }catch(_){} },5000); }
 function stopPoll(){ if(pollT){clearInterval(pollT);pollT=null;} }
 
 // ── RENDER ──
@@ -285,11 +286,13 @@ function renderRoom(){
       const myOdds=joined.choice==='a'?d.opt_a_odds:d.opt_b_odds;
       jform=`<div class="jform" style="border-color:var(--accent3)"><h3 style="color:var(--accent3)">✅ Katıldın!</h3><p style="color:var(--muted);font-size:.83rem;margin-top:4px"><strong>${esc(myNick)}</strong> → <strong>${esc(myOpt)}</strong> · ${joined.amount} ₺ · Potansiyel: ${(joined.amount*myOdds).toFixed(0)} ₺</p></div>`;
     } else {
+      const savedNick=document.getElementById('jnick')?.value||sessionStorage.getItem('global_nick')||'';
+      const savedAmt=document.getElementById('jamt')?.value||'';
       jform=`<div class="jform"><h3>Bahse Gir</h3>
         <div id="selinfo" style="font-size:.8rem;color:var(--muted);margin-bottom:11px">↑ Önce bir seçenek seç</div>
         <div class="jrow">
-          <div class="field"><label>Nickname</label><input id="jnick" placeholder="Adın" value="${esc(sessionStorage.getItem('global_nick')||'')}" /></div>
-          <div class="field"><label>Miktar (₺)</label><input id="jamt" type="number" min="1" placeholder="50" /></div>
+          <div class="field"><label>Nickname</label><input id="jnick" placeholder="Adın" value="${esc(savedNick)}" /></div>
+          <div class="field"><label>Miktar (₺)</label><input id="jamt" type="number" min="1" placeholder="50" value="${esc(savedAmt)}" /></div>
           <button class="btn btn-p btn-sm" id="jbtn" onclick="placeBet()" style="margin-top:22px;white-space:nowrap">Katıl ✦</button>
         </div></div>`;
     }
