@@ -254,7 +254,7 @@ async function loadBet(id){
 }
 
 // ── POLL ──
-function startPoll(){ stopPoll(); pollT=setInterval(async()=>{ if(!betId)return; try{ const r=await fetch(`${API}/${betId}`); const d=await r.json(); if(r.ok){ const prev=betData?.participants?.length??0; const newParts=d.participants.length; betData=d; partialUpdate(); if(newParts>prev)toast('🎉 Yeni katılımcı!'); } }catch(_){} },5000); }
+function startPoll(){ stopPoll(); pollT=setInterval(async()=>{ if(!betId)return; try{ const r=await fetch(`${API}/${betId}`); const d=await r.json(); if(r.ok){ const prev=betData?.participants?.length??0; const newParts=d.participants.length; betData=d; partialUpdate(); if(newParts>prev)toast('🎉 Yeni katılımcı!'); } }catch(_){} },40000); }
 function stopPoll(){ if(pollT){clearInterval(pollT);pollT=null;} }
 
 // ── HELPERS ──
@@ -333,7 +333,7 @@ function renderRoom(){
     <div class="pool"><div class="pool-top"><span class="pool-lbl">Toplam Havuz</span><span class="pool-tot" id="r-total">${tot} ₺</span></div><div class="bar"><div class="bar-fill" id="r-bar" style="width:${pctA}%"></div></div><div class="bar-lbl"><span id="r-lbl-a">${esc(d.opt_a_name)} %${pctA}</span><span id="r-lbl-b">${esc(d.opt_b_name)} %${100-pctA}</span></div></div>
     ${jform}
     ${adminBar}
-    <div class="live"><span class="ldot"></span>Her 5 saniyede güncellenir</div>
+    <div class="live"><span class="ldot"></span>Her 40 saniyede güncellenir</div>
     <div class="divider"></div>
     <div class="psec-title" id="r-ptitle">Katılımcılar (${parts.length})</div>
     <div id="r-parts">${partsHtml(parts,d,myNick)}</div>`;
